@@ -1,5 +1,7 @@
 # Evals Review Tools
 
+[ Cuz i was too lazy to review ;) ]
+
 Two small tools for learning how to evaluate LLM outputs:
 
 - **Trace Reviewer** shows your bot's answers one at a time in a readable layout. You mark each answer ok or a problem, write a note, name a failure category, and later add pass/fail rubric criteria. It counts your categories and exports a labeled CSV.
