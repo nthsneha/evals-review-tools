@@ -1,0 +1,32 @@
+{
+  "name": "evals-review-tools",
+  "displayName": "Evals Review Tools",
+  "description": "Read and annotate LLM outputs, then review your LLM judge's verdicts against your own labels. Built for learning evals.",
+  "version": "0.1.0",
+  "publisher": "your-name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-github-username/evals-review-tools"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other", "Testing"],
+  "keywords": ["evals", "llm", "llm-as-a-judge", "annotation", "csv"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "evalReview.openTraceReviewer",
+        "title": "Open Trace Reviewer",
+        "category": "Evals"
+      },
+      {
+        "command": "evalReview.openJudgeReviewer",
+        "title": "Open Judge Reviewer",
+        "category": "Evals"
+      }
+    ]
+  }
+}

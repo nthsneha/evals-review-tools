@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trace reviewer</title>
+<style>
+:root{
+  --bg:#f4f5f3; --panel:#ffffff; --ink:#1c2329; --muted:#5d6872; --line:#dce0e4;
+  --accent:#1f5f8b; --accent-soft:#e2edf5; --on-accent:#ffffff; --sel:#eaf1f6;
+  --ok:#2c7a4b; --ok-soft:#e0f1e6; --bad:#b3362e; --bad-soft:#f8e2df;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#14181c; --panel:#1b2127; --ink:#e5e8eb; --muted:#97a2ac; --line:#2c343b;
+    --accent:#6fb0e2; --accent-soft:#1d3040; --on-accent:#0f1418; --sel:#222c35;
+    --ok:#6dc08d; --ok-soft:#1c3226; --bad:#ef8b83; --bad-soft:#3a2321;
+  }
+}
+
+/* Follow the IDE theme when running inside VS Code */
+body.vscode-dark,body.vscode-high-contrast:not(.vscode-high-contrast-light){
+    --bg:#14181c; --panel:#1b2127; --ink:#e5e8eb; --muted:#97a2ac; --line:#2c343b;
+    --accent:#6fb0e2; --accent-soft:#1d3040; --on-accent:#0f1418; --sel:#222c35;
+    --ok:#6dc08d; --ok-soft:#1c3226; --bad:#ef8b83; --bad-soft:#3a2321;
+  }
+body.vscode-light,body.vscode-high-contrast-light{
+  --bg:#f4f5f3; --panel:#ffffff; --ink:#1c2329; --muted:#5d6872; --line:#dce0e4;
+  --accent:#1f5f8b; --accent-soft:#e2edf5; --on-accent:#ffffff; --sel:#eaf1f6;
+  --ok:#2c7a4b; --ok-soft:#e0f1e6; --bad:#b3362e; --bad-soft:#f8e2df;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-rows:auto 1fr;height:100%}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+.top .name{font-weight:600}
+.top .progress{margin-left:auto;color:var(--muted);font-size:.9rem}
+
+.main{display:grid;grid-template-columns:250px minmax(0,1fr) 340px;min-height:0}
+.side{display:flex;flex-direction:column;min-height:0;background:var(--panel);border-right:1px solid var(--line)}
+.filter{padding:10px 14px;border-bottom:1px solid var(--line)}
+.filter select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.list{overflow:auto;flex:1}
+.item{display:flex;gap:10px;width:100%;text-align:left;padding:10px 14px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.item.active{background:var(--sel);box-shadow:inset 3px 0 0 var(--accent)}
+.dot{flex:none;width:10px;height:10px;margin-top:6px;border-radius:50%;border:1.5px solid var(--muted)}
+.dot.ok{background:var(--ok);border-color:var(--ok)}
+.dot.problem{background:var(--bad);border-color:var(--bad)}
+.item .id{font-weight:600;font-size:.85rem}
+.item .q{font-size:.85rem;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.none{padding:14px;color:var(--muted);font-size:.9rem}
+
+.reader{overflow:auto;padding:28px clamp(18px,4vw,48px) 48px}
+.col{max-width:68ch;margin:0 auto}
+.head{display:flex;align-items:baseline;gap:12px}
+.head h1{margin:0;font-size:1.3rem}
+.pos{color:var(--muted);font-size:.9rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip{font-size:.8rem;padding:2px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+.who{font-size:.85rem;color:var(--muted);margin:24px 0 6px}
+.question{background:var(--accent-soft);border-radius:10px;padding:12px 16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.answer{font-family:var(--serif);font-size:1.2rem;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.wc{margin:12px 0 0;font-size:.85rem;color:var(--muted)}
+.wc.warn{color:var(--bad);font-weight:600}
+.expected{margin-top:28px;padding:8px 16px;border-left:3px solid var(--accent)}
+.expected b{display:block;font-size:.85rem;color:var(--muted);font-weight:600;margin-bottom:2px}
+.expected div{white-space:pre-wrap}
+.nav{display:flex;gap:8px;margin-top:32px}
+.hint{margin-top:24px;font-size:.85rem;color:var(--muted)}
+kbd{font-family:inherit;font-size:.8rem;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--panel)}
+.empty{max-width:52ch;margin:12vh auto 0}
+.empty h1{font-size:1.5rem;margin:0 0 8px}
+.empty p{color:var(--muted)}
+
+.review{overflow:auto;padding:18px;background:var(--panel);border-left:1px solid var(--line)}
+.review h2{margin:0 0 10px;font-size:1rem}
+.review h2.sp{margin-top:26px}
+.review label{display:block;margin:16px 0 6px;font-size:.9rem;color:var(--muted)}
+.review textarea,.review input[type=text],.review input:not([type]){width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.review textarea{min-height:120px;resize:vertical}
+.seg{display:flex;gap:8px}
+.seg button{flex:1}
+button.on.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);font-weight:600}
+button.on.problem{background:var(--bad-soft);border-color:var(--bad);color:var(--bad);font-weight:600}
+.small{font-size:.85rem;color:var(--muted);margin:0 0 10px}
+.crit{display:flex;align-items:center;gap:8px;margin:8px 0}
+.crit .cname{flex:1;font-size:.92rem}
+.crit .pf{display:flex;gap:4px}
+.crit .pf button{padding:3px 10px;font-size:.88rem}
+.crit .x{border:0;background:transparent;color:var(--muted);padding:2px 6px}
+.addrow{display:flex;gap:8px;margin-top:12px}
+
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:20px;max-width:min(560px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog h2{margin:0 0 12px;font-size:1.1rem}
+dialog table{width:100%;border-collapse:collapse;margin-bottom:12px}
+dialog th,dialog td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:.92rem;vertical-align:top}
+dialog td.n{width:3.5rem;font-variant-numeric:tabular-nums}
+dialog .row{display:flex;gap:8px;justify-content:space-between;margin-top:16px}
+
+@media (max-width:1100px){
+  html,body{height:auto}
+  .app{height:auto}
+  .main{display:block}
+  .side{border-right:0;border-bottom:1px solid var(--line)}
+  .list{max-height:220px}
+  .reader{overflow:visible}
+  .review{overflow:visible;border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="name" id="fname">No file open</span>
+    <button id="open" class="primary" data-open>Open CSV</button>
+    <button id="cats" disabled>Failure categories</button>
+    <button id="export" disabled>Export CSV</button>
+    <span class="progress" id="progress"></span>
+    <input type="file" id="file" accept=".csv,text/csv" hidden>
+  </header>
+  <div class="main">
+    <aside class="side">
+      <div class="filter">
+        <select id="filter" aria-label="Filter answers">
+          <option value="all">All answers</option>
+          <option value="todo">Not reviewed yet</option>
+          <option value="problem">Marked as problems</option>
+        </select>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+    <main class="reader" id="reader"></main>
+    <aside class="review" id="review" aria-label="Your review"></aside>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <h2>Failure categories</h2>
+  <div id="dlgbody"></div>
+  <div class="row">
+    <button id="clear">Clear saved progress for this file</button>
+    <button id="close" class="primary">Close</button>
+  </div>
+</dialog>
+
+<script>
+// <parser>
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/, '');
+  var rows = [], row = [], field = '', inQ = false;
+  for (var i = 0; i < text.length; i++){
+    var c = text[i];
+    if (inQ){
+      if (c === '"'){
+        if (text[i+1] === '"'){ field += '"'; i++; } else { inQ = false; }
+      } else { field += c; }
+    } else {
+      if (c === '"'){ inQ = true; }
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r'){
+        if (c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = ''; rows.push(row); row = [];
+      } else { field += c; }
+    }
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(function(r){ return !(r.length === 1 && r[0] === ''); });
+}
+function csvCell(v){
+  v = (v === null || v === undefined) ? '' : String(v);
+  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+// </parser>
+
+
+var VSC = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;
+var store = {
+  mem: {},
+  get: function(k){
+    if (VSC) return this.mem[k] === undefined ? null : this.mem[k];
+    try { return localStorage.getItem(k); } catch(e) { return null; }
+  },
+  set: function(k, v){
+    if (VSC){ this.mem[k] = v; VSC.postMessage({type:'saveState', key:k, value:v}); return; }
+    try { localStorage.setItem(k, v); } catch(e) {}
+  },
+  remove: function(k){
+    if (VSC){ delete this.mem[k]; VSC.postMessage({type:'removeState', key:k}); return; }
+    try { localStorage.removeItem(k); } catch(e) {}
+  }
+};
+var pendingAsk = {}, askId = 0;
+function ask(message, ok){
+  if (VSC){ var id = ++askId; pendingAsk[id] = ok; VSC.postMessage({type:'confirm', id:id, message:message}); }
+  else if (confirm(message)) ok();
+}
+function notify(message){
+  if (VSC) VSC.postMessage({type:'notify', level:'error', message:message}); else alert(message);
+}
+function pickFiles(){ if (VSC) VSC.postMessage({type:'openFiles'}); else document.querySelector('#file').click(); }
+window.addEventListener('message', function(e){
+  var m = e.data || {};
+  if (m.type === 'files'){
+    Object.keys(m.saved || {}).forEach(function(k){ store.mem[k] = m.saved[k]; });
+    onFilesFromHost(m.files || []);
+  } else if (m.type === 'confirmResult'){
+    var cb = pendingAsk[m.id]; delete pendingAsk[m.id]; if (cb && m.ok) cb();
+  }
+});
+
+var LS = 'evalreview:';
+var state = {fileName:'', headers:[], rows:[], cols:{}, keys:[], cur:0, review:{}, criteria:[], filter:'all'};
+var $ = function(s){ return document.querySelector(s); };
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function rev(i){
+  var k = state.keys[i];
+  if (!state.review[k]) state.review[k] = {status:'', note:'', category:'', pf:{}};
+  return state.review[k];
+}
+function save(){
+  try {
+    store.set(LS + state.fileName, JSON.stringify({review:state.review, criteria:state.criteria}));
+  } catch(e) {}
+}
+function idOf(i){ return state.cols.id ? state.rows[i][state.cols.id] : String(i + 1); }
+
+function loadText(name, text){
+  var table = parseCSV(text);
+  if (table.length < 2){ notify('That file has no data rows.'); return; }
+  var headers = table[0].map(function(h){ return h.trim(); });
+  var find = function(n){ return headers.find(function(h){ return h.toLowerCase() === n; }); };
+  var cols = {id: find('id'), q: find('question'), a: find('bot_answer') || find('answer') || find('output')};
+  if (!cols.q || !cols.a){
+    notify('Expected columns named "question" and "bot_answer". Found: ' + headers.join(', '));
+    return;
+  }
+  var reviewCols = ['review_status', 'note', 'failure_category'];
+  var pfCols = headers.filter(function(h){ return h.indexOf('pf_') === 0; });
+  var rows = table.slice(1).map(function(r){
+    var o = {};
+    headers.forEach(function(h, i){ o[h] = r[i] === undefined ? '' : r[i]; });
+    return o;
+  });
+  var ids = rows.map(function(r){ return cols.id ? r[cols.id] : ''; });
+  var unique = cols.id && ids.indexOf('') === -1 && new Set(ids).size === ids.length;
+
+  state.fileName = name;
+  state.headers = headers.filter(function(h){ return reviewCols.indexOf(h) === -1 && h.indexOf('pf_') !== 0; });
+  state.rows = rows; state.cols = cols; state.cur = 0; state.filter = 'all';
+  state.keys = rows.map(function(r, i){ return unique ? ids[i] : 'row' + i; });
+  $('#filter').value = 'all';
+
+  var review = {};
+  var criteria = pfCols.map(function(h){ return h.slice(3); });
+  rows.forEach(function(r, i){
+    var pf = {};
+    pfCols.forEach(function(h){
+      var v = (r[h] || '').toUpperCase();
+      if (v === 'PASS') pf[h.slice(3)] = 'P'; else if (v === 'FAIL') pf[h.slice(3)] = 'F';
+    });
+    review[state.keys[i]] = {status:r.review_status || '', note:r.note || '', category:r.failure_category || '', pf:pf};
+  });
+  state.review = review; state.criteria = criteria;
+  try {
+    var s = JSON.parse(store.get(LS + name) || 'null');
+    if (s){
+      Object.keys(review).forEach(function(k){ if (s.review && s.review[k]) review[k] = s.review[k]; });
+      if (s.criteria) state.criteria = s.criteria;
+    }
+  } catch(e) {}
+  renderAll();
+}
+
+function readFile(f){
+  var rd = new FileReader();
+  rd.onload = function(){ loadText(f.name, rd.result); };
+  rd.readAsText(f);
+}
+
+function onFilesFromHost(files){ if (files[0]) loadText(files[0].name, files[0].text); }
+
+function renderTop(){
+  var n = state.rows.length;
+  $('#fname').textContent = state.fileName || 'No file open';
+  $('#cats').disabled = !n; $('#export').disabled = !n;
+  if (!n){ $('#progress').textContent = ''; return; }
+  var done = 0, prob = 0;
+  for (var i = 0; i < n; i++){ var R = rev(i); if (R.status) done++; if (R.status === 'problem') prob++; }
+  $('#progress').textContent = done + ' of ' + n + ' reviewed, ' + prob + ' with problems';
+}
+
+function renderList(){
+  var el = $('#list'), st = el.scrollTop, html = '';
+  state.rows.forEach(function(r, i){
+    var R = rev(i);
+    if (state.filter === 'todo' && R.status) return;
+    if (state.filter === 'problem' && R.status !== 'problem') return;
+    html += '<button class="item' + (i === state.cur ? ' active' : '') + '" data-i="' + i + '">' +
+      '<span class="dot ' + esc(R.status) + '"></span><span><span class="id">' + esc(idOf(i)) + '</span>' +
+      '<span class="q">' + esc(r[state.cols.q]) + '</span></span></button>';
+  });
+  el.innerHTML = html || '<p class="none">' + (state.rows.length ? 'Nothing matches this filter.' : 'Open a CSV to start.') + '</p>';
+  el.scrollTop = st;
+}
+
+function renderReader(){
+  var el = $('#reader');
+  if (!state.rows.length){
+    el.innerHTML = '<div class="empty"><h1>Review your bot\'s answers</h1>' +
+      '<p>Open the results file your script saved (for example results_v1.csv), or drag it onto this page. ' +
+      'Each answer is shown one at a time in a readable layout. Your notes save in this browser as you type. ' +
+      'Use Export CSV to get a copy with your notes and labels added.</p>' +
+      '<button class="primary" data-open>Open CSV</button></div>';
+    return;
+  }
+  var r = state.rows[state.cur], c = state.cols;
+  var expKey = state.headers.find(function(h){ return h.toLowerCase() === 'good_answer_must_include'; });
+  var skip = [c.id, c.q, c.a, expKey];
+  var chips = state.headers.filter(function(h){ return skip.indexOf(h) === -1 && r[h] !== ''; })
+    .map(function(h){ return '<span class="chip">' + esc(h) + ': ' + esc(r[h]) + '</span>'; }).join('');
+  var ans = r[c.a].replace(/\n{3,}/g, '\n\n').trim();
+  var wc = ans ? ans.split(/\s+/).length : 0;
+  var exp = (expKey && r[expKey]) ? '<div class="expected"><b>Good answer must include</b><div>' + esc(r[expKey]) + '</div></div>' : '';
+  el.innerHTML = '<div class="col">' +
+    '<div class="head"><h1>' + esc(idOf(state.cur)) + '</h1><span class="pos">' + (state.cur + 1) + ' of ' + state.rows.length + '</span></div>' +
+    (chips ? '<div class="chips">' + chips + '</div>' : '') +
+    '<div class="who">Customer</div><div class="question">' + esc(r[c.q]) + '</div>' +
+    '<div class="who">Bot</div><div class="answer">' + esc(ans) + '</div>' +
+    '<p class="wc' + (wc > 100 ? ' warn' : '') + '">' + wc + ' words' + (wc > 100 ? ' (over the 100-word limit)' : '') + '</p>' +
+    exp +
+    '<div class="nav"><button data-go="-1">Previous</button><button data-go="1">Next</button></div>' +
+    '<p class="hint"><kbd>←</kbd> <kbd>→</kbd> move between answers. <kbd>o</kbd> marks ok and moves on. ' +
+    '<kbd>p</kbd> marks a problem and jumps to the note. <kbd>Esc</kbd> leaves a text box.</p></div>';
+  el.scrollTop = 0;
+}
+
+function renderReview(){
+  var el = $('#review');
+  if (!state.rows.length){ el.innerHTML = ''; return; }
+  var R = rev(state.cur);
+  var used = {};
+  Object.keys(state.review).forEach(function(k){
+    (state.review[k].category || '').split(';').forEach(function(s){ s = s.trim(); if (s) used[s] = 1; });
+  });
+  var crit = state.criteria.map(function(cn){
+    return '<div class="crit"><span class="cname">' + esc(cn.replace(/_/g, ' ')) + '</span><span class="pf">' +
+      '<button data-pf="' + esc(cn) + '" data-v="P" class="' + (R.pf[cn] === 'P' ? 'on ok' : '') + '">Pass</button>' +
+      '<button data-pf="' + esc(cn) + '" data-v="F" class="' + (R.pf[cn] === 'F' ? 'on problem' : '') + '">Fail</button></span>' +
+      '<button class="x" data-rm="' + esc(cn) + '" aria-label="Remove ' + esc(cn) + '" title="Remove">×</button></div>';
+  }).join('');
+  el.innerHTML =
+    '<h2>Open coding</h2>' +
+    '<div class="seg" role="group" aria-label="Status">' +
+      '<button data-status="ok" class="' + (R.status === 'ok' ? 'on ok' : '') + '">Looks ok</button>' +
+      '<button data-status="problem" class="' + (R.status === 'problem' ? 'on problem' : '') + '">Has a problem</button></div>' +
+    '<label for="note">First thing wrong, in your own words</label>' +
+    '<textarea id="note" placeholder="For example: invents an email confirmation that is not in the policy.">' + esc(R.note) + '</textarea>' +
+    '<label for="cat">Failure category</label>' +
+    '<input id="cat" type="text" list="catlist" value="' + esc(R.category) + '" placeholder="One name per problem type. Separate several with ;">' +
+    '<datalist id="catlist">' + Object.keys(used).map(function(c){ return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
+    '<h2 class="sp">Rubric, pass or fail</h2>' +
+    '<p class="small">Add your criteria here after Step 4, then mark each answer.</p>' +
+    crit +
+    '<div class="addrow"><input id="newcrit" type="text" placeholder="New criterion, e.g. no invented details" aria-label="New criterion"><button id="addcrit">Add</button></div>';
+}
+
+function renderAll(){ renderTop(); renderList(); renderReader(); renderReview(); }
+
+function go(i){
+  if (!state.rows.length) return;
+  state.cur = Math.max(0, Math.min(state.rows.length - 1, i));
+  renderList(); renderReader(); renderReview();
+  var a = $('#list .active'); if (a) a.scrollIntoView({block:'nearest'});
+}
+function setStatus(v, toggle){
+  var R = rev(state.cur);
+  R.status = (toggle && R.status === v) ? '' : v;
+  save(); renderTop(); renderList(); renderReview();
+}
+
+// events
+$('#open').addEventListener('click', pickFiles);
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-open]'); if (t) pickFiles();
+});
+$('#file').addEventListener('change', function(e){ if (e.target.files[0]) readFile(e.target.files[0]); e.target.value = ''; });
+window.addEventListener('dragover', function(e){ e.preventDefault(); });
+window.addEventListener('drop', function(e){
+  e.preventDefault(); var f = e.dataTransfer.files[0]; if (f) readFile(f);
+});
+$('#filter').addEventListener('change', function(e){ state.filter = e.target.value; renderList(); });
+$('#list').addEventListener('click', function(e){
+  var it = e.target.closest('.item'); if (it) go(Number(it.dataset.i));
+});
+$('#reader').addEventListener('click', function(e){
+  var g = e.target.closest('[data-go]'); if (g) go(state.cur + Number(g.dataset.go));
+});
+$('#review').addEventListener('click', function(e){
+  var b = e.target.closest('button'); if (!b) return;
+  var R = rev(state.cur);
+  if (b.dataset.status){ setStatus(b.dataset.status, true); return; }
+  if (b.dataset.pf){
+    R.pf[b.dataset.pf] = (R.pf[b.dataset.pf] === b.dataset.v) ? undefined : b.dataset.v;
+    save(); renderReview(); return;
+  }
+  if (b.dataset.rm){
+    var rmName = b.dataset.rm;
+    ask('Remove this criterion and all its pass/fail marks?', function(){
+      state.criteria = state.criteria.filter(function(c){ return c !== rmName; });
+      Object.keys(state.review).forEach(function(k){ delete state.review[k].pf[rmName]; });
+      save(); renderReview();
+    });
+    return;
+  }
+  if (b.id === 'addcrit') addCriterion();
+});
+function addCriterion(){
+  var inp = $('#newcrit');
+  var slug = inp.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!slug || state.criteria.indexOf(slug) !== -1) return;
+  state.criteria.push(slug); save(); renderReview();
+}
+$('#review').addEventListener('input', function(e){
+  var R = rev(state.cur);
+  if (e.target.id === 'note') R.note = e.target.value;
+  else if (e.target.id === 'cat') R.category = e.target.value;
+  else return;
+  save();
+});
+$('#review').addEventListener('keydown', function(e){
+  if (e.key === 'Enter' && e.target.id === 'newcrit'){ e.preventDefault(); addCriterion(); }
+});
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && document.activeElement && document.activeElement.matches('input,textarea')){
+    document.activeElement.blur(); return;
+  }
+  if (document.activeElement && document.activeElement.matches('input,textarea,select')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || !state.rows.length) return;
+  if (e.key === 'ArrowRight' || e.key === 'j') go(state.cur + 1);
+  else if (e.key === 'ArrowLeft' || e.key === 'k') go(state.cur - 1);
+  else if (e.key === 'o'){ setStatus('ok', false); go(state.cur + 1); }
+  else if (e.key === 'p'){ e.preventDefault(); setStatus('problem', false); var n = $('#note'); if (n) n.focus(); }
+});
+
+// categories dialog
+$('#cats').addEventListener('click', function(){
+  var counts = {}, ids = {}, uncat = 0;
+  state.rows.forEach(function(r, i){
+    var R = rev(i);
+    var cs = R.category.split(';').map(function(s){ return s.trim(); }).filter(Boolean);
+    if (cs.length){
+      cs.forEach(function(c){
+        counts[c] = (counts[c] || 0) + 1;
+        (ids[c] = ids[c] || []).push(idOf(i));
+      });
+    } else if (R.status === 'problem') uncat++;
+  });
+  var names = Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; });
+  var html = names.length
+    ? '<table><thead><tr><th>Category</th><th class="n">Count</th><th>Answers</th></tr></thead><tbody>' +
+      names.map(function(n){ return '<tr><td>' + esc(n) + '</td><td class="n">' + counts[n] + '</td><td>' + esc(ids[n].join(', ')) + '</td></tr>'; }).join('') +
+      '</tbody></table>'
+    : '<p class="small">No categories yet. Name a failure category on each problem answer and the counts will show up here.</p>';
+  if (uncat) html += '<p class="small">' + uncat + ' answer' + (uncat === 1 ? '' : 's') + ' marked as a problem but without a category.</p>';
+  $('#dlgbody').innerHTML = html;
+  $('#dlg').showModal();
+});
+$('#close').addEventListener('click', function(){ $('#dlg').close(); });
+$('#clear').addEventListener('click', function(){
+  ask('This clears the progress saved for this file. Your CSV files are not touched. Continue?', function(){
+    store.remove(LS + state.fileName);
+    $('#dlg').close();
+    state.review = {}; state.criteria = []; renderAll();
+  });
+});
+
+// export
+$('#export').addEventListener('click', function(){
+  var head = state.headers.concat(['review_status', 'note', 'failure_category'], state.criteria.map(function(c){ return 'pf_' + c; }));
+  var lines = [head.map(csvCell).join(',')];
+  state.rows.forEach(function(r, i){
+    var R = rev(i);
+    var cells = state.headers.map(function(h){ return r[h]; })
+      .concat([R.status, R.note, R.category], state.criteria.map(function(c){ return R.pf[c] === 'P' ? 'PASS' : R.pf[c] === 'F' ? 'FAIL' : ''; }));
+    lines.push(cells.map(csvCell).join(','));
+  });
+  if (VSC){ VSC.postMessage({type:'export', filename:'labeled_' + state.fileName.replace(/^labeled_/, ''), text:lines.join('\n')}); return; }
+  var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'labeled_' + state.fileName.replace(/^labeled_/, '');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+});
+
+renderAll();
+</script>
+</body>
+</html>

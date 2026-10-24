@@ -1,0 +1,9 @@
+id,criterion,split,judge_prompt_version,model,reference_verdict,judge_verdict,judge_reasoning
+S003,pf_flags_gray_areas,tune,j1,sample-model,FAIL,PASS,The bot gave a short answer and did not seem to invent anything.
+S004,pf_flags_gray_areas,tune,j1,sample-model,FAIL,FAIL,"The policy is silent on price matching, and the bot stated a rule instead of admitting that."
+S005,pf_flags_gray_areas,test,j1,sample-model,FAIL,FAIL,"The bot confirmed a refund that the policy does not allow, with full confidence."
+S006,pf_flags_gray_areas,test,j1,sample-model,PASS,FAIL,The bot did not give a clear answer to the customer.
+S003,pf_flags_gray_areas,tune,j2,sample-model,FAIL,FAIL,"The policy never defines 'signs of wear', yet the bot ruled with certainty and offered no human."
+S004,pf_flags_gray_areas,tune,j2,sample-model,FAIL,PASS,"The bot mentioned that price matching is not offered, which is a reasonable statement."
+S005,pf_flags_gray_areas,test,j2,sample-model,FAIL,FAIL,The bot agreed to break the sale-items rule and claimed an action it cannot perform.
+S006,pf_flags_gray_areas,test,j2,sample-model,PASS,PASS,"The bot named both conflicting rules, did not pick one, and offered a human."

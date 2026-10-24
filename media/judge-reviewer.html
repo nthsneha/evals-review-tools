@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Judge reviewer</title>
+<style>
+:root{
+  --bg:#f4f5f3; --panel:#ffffff; --ink:#1c2329; --muted:#5d6872; --line:#dce0e4;
+  --accent:#1f5f8b; --accent-soft:#e2edf5; --on-accent:#ffffff; --sel:#eaf1f6;
+  --ok:#2c7a4b; --ok-soft:#e0f1e6; --bad:#b3362e; --bad-soft:#f8e2df; --warn:#8a5a00; --warn-soft:#fbf0d9;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#14181c; --panel:#1b2127; --ink:#e5e8eb; --muted:#97a2ac; --line:#2c343b;
+    --accent:#6fb0e2; --accent-soft:#1d3040; --on-accent:#0f1418; --sel:#222c35;
+    --ok:#6dc08d; --ok-soft:#1c3226; --bad:#ef8b83; --bad-soft:#3a2321; --warn:#e5b95c; --warn-soft:#3a3016;
+  }
+}
+
+/* Follow the IDE theme when running inside VS Code */
+body.vscode-dark,body.vscode-high-contrast:not(.vscode-high-contrast-light){
+    --bg:#14181c; --panel:#1b2127; --ink:#e5e8eb; --muted:#97a2ac; --line:#2c343b;
+    --accent:#6fb0e2; --accent-soft:#1d3040; --on-accent:#0f1418; --sel:#222c35;
+    --ok:#6dc08d; --ok-soft:#1c3226; --bad:#ef8b83; --bad-soft:#3a2321; --warn:#e5b95c; --warn-soft:#3a3016;
+  }
+body.vscode-light,body.vscode-high-contrast-light{
+  --bg:#f4f5f3; --panel:#ffffff; --ink:#1c2329; --muted:#5d6872; --line:#dce0e4;
+  --accent:#1f5f8b; --accent-soft:#e2edf5; --on-accent:#ffffff; --sel:#eaf1f6;
+  --ok:#2c7a4b; --ok-soft:#e0f1e6; --bad:#b3362e; --bad-soft:#f8e2df; --warn:#8a5a00; --warn-soft:#fbf0d9;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-rows:auto 1fr;height:100%}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+.top .name{font-weight:600}
+.top .progress{margin-left:auto;color:var(--muted);font-size:.9rem}
+
+.main{display:grid;grid-template-columns:280px minmax(0,1fr) 370px;min-height:0}
+.side{display:flex;flex-direction:column;min-height:0;background:var(--panel);border-right:1px solid var(--line)}
+.filters{padding:12px 14px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.filters label{font-size:.8rem;color:var(--muted)}
+.filters select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.banner{margin:0;padding:8px 14px;font-size:.85rem;background:var(--warn-soft);color:var(--warn);border-bottom:1px solid var(--line)}
+.score{padding:12px 14px;border-bottom:1px solid var(--line);font-size:.88rem}
+.score .srow{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.score .srow span{color:var(--muted)}
+.score .srow b{font-variant-numeric:tabular-nums;text-align:right}
+.score .snote{margin:8px 0 0;color:var(--muted);font-size:.82rem}
+.list{overflow:auto;flex:1}
+.item{display:flex;gap:10px;width:100%;text-align:left;padding:9px 14px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.item.active{background:var(--sel);box-shadow:inset 3px 0 0 var(--accent)}
+.dot{flex:none;width:10px;height:10px;margin-top:6px;border-radius:50%;border:1.5px solid var(--muted)}
+.dot.ok{background:var(--ok);border-color:var(--ok)}
+.dot.problem{background:var(--bad);border-color:var(--bad)}
+.item .id{font-weight:600;font-size:.88rem}
+.item .sub{display:block;font-size:.8rem;color:var(--muted)}
+.item.done .id::after{content:" \2713";color:var(--ok)}
+.none{padding:14px;color:var(--muted);font-size:.9rem}
+
+.reader{overflow:auto;padding:28px clamp(18px,4vw,48px) 48px}
+.col{max-width:68ch;margin:0 auto}
+.head{display:flex;align-items:baseline;gap:12px}
+.head h1{margin:0;font-size:1.3rem}
+.pos{color:var(--muted);font-size:.9rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip{font-size:.8rem;padding:2px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who{font-size:.85rem;color:var(--muted);margin:24px 0 6px}
+.question{background:var(--accent-soft);border-radius:10px;padding:12px 16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.answer{font-family:var(--serif);font-size:1.2rem;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.expected{margin-top:24px;padding:8px 16px;border-left:3px solid var(--accent)}
+.expected b{display:block;font-size:.85rem;color:var(--muted);font-weight:600;margin-bottom:2px}
+.expected div{white-space:pre-wrap}
+.mynote{margin-top:24px;padding:10px 14px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
+.missing{margin-top:24px;padding:12px 16px;border:1px dashed var(--line);border-radius:8px;color:var(--muted)}
+.nav{display:flex;gap:8px;margin-top:32px}
+.hint{margin-top:24px;font-size:.85rem;color:var(--muted)}
+kbd{font-family:inherit;font-size:.8rem;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;background:var(--panel)}
+.empty{max-width:54ch;margin:12vh auto 0}
+.empty h1{font-size:1.5rem;margin:0 0 8px}
+.empty p{color:var(--muted)}
+
+.review{overflow:auto;padding:18px;background:var(--panel);border-left:1px solid var(--line)}
+.review h2{margin:0 0 10px;font-size:1rem}
+.review h2.sp{margin-top:24px}
+.review label{display:block;margin:16px 0 6px;font-size:.9rem;color:var(--muted)}
+.review textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-height:100px;resize:vertical}
+.verdicts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vbox{border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.vbox span{display:block;font-size:.8rem;color:var(--muted)}
+.vbox b{font-size:1.15rem}
+.vbox b.PASS{color:var(--ok)}
+.vbox b.FAIL{color:var(--bad)}
+.vbox b.none{color:var(--muted)}
+.badge{margin:10px 0 0;padding:8px 12px;border-radius:8px;font-size:.9rem;font-weight:600}
+.badge.agree{background:var(--ok-soft);color:var(--ok)}
+.badge.lenient,.badge.strict{background:var(--bad-soft);color:var(--bad)}
+.badge.error,.badge.nolabel{background:var(--warn-soft);color:var(--warn)}
+.reason{font-family:var(--serif);font-size:1.02rem;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.causes{display:grid;gap:6px}
+.causes button{text-align:left}
+button.on{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
+.small{font-size:.85rem;color:var(--muted);margin:8px 0 0}
+
+@media (max-width:1100px){
+  html,body{height:auto}
+  .app{height:auto}
+  .main{display:block}
+  .side{border-right:0;border-bottom:1px solid var(--line)}
+  .list{max-height:240px}
+  .reader{overflow:visible}
+  .review{overflow:visible;border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="name" id="fname">No file open</span>
+    <button id="open" class="primary" data-open>Open files</button>
+    <button id="export" disabled>Export CSV</button>
+    <span class="progress" id="progress"></span>
+    <input type="file" id="file" accept=".csv,text/csv" multiple hidden>
+  </header>
+  <div class="main">
+    <aside class="side">
+      <div class="filters">
+        <div><label for="fcrit">Criterion</label><select id="fcrit"></select></div>
+        <div><label for="fver">Judge prompt version</label><select id="fver"></select></div>
+        <div><label for="fsplit">Split</label><select id="fsplit"></select></div>
+        <div><label for="fshow">Show</label>
+          <select id="fshow">
+            <option value="diff">Disagreements</option>
+            <option value="todo">Disagreements I haven't explained</option>
+            <option value="error">Rows with no verdict</option>
+            <option value="all">All rows</option>
+          </select></div>
+      </div>
+      <div id="banner"></div>
+      <div class="score" id="score"></div>
+      <div class="list" id="list"></div>
+    </aside>
+    <main class="reader" id="reader"></main>
+    <aside class="review" id="review" aria-label="Your review"></aside>
+  </div>
+</div>
+
+<script>
+// <logic>
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/, '');
+  var rows = [], row = [], field = '', inQ = false;
+  for (var i = 0; i < text.length; i++){
+    var c = text[i];
+    if (inQ){
+      if (c === '"'){
+        if (text[i+1] === '"'){ field += '"'; i++; } else { inQ = false; }
+      } else { field += c; }
+    } else {
+      if (c === '"'){ inQ = true; }
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r'){
+        if (c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = ''; rows.push(row); row = [];
+      } else { field += c; }
+    }
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(function(r){ return !(r.length === 1 && r[0] === ''); });
+}
+function csvCell(v){
+  v = (v === null || v === undefined) ? '' : String(v);
+  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function norm(v){
+  v = (v || '').trim().toUpperCase();
+  return (v === 'PASS' || v === 'FAIL') ? v : '';
+}
+// Fail is the "positive" class. lenient = you said FAIL, judge said PASS (missed failure).
+// strict = you said PASS, judge said FAIL (false alarm).
+function kindOf(ref, judge){
+  if (!judge) return 'error';
+  if (!ref) return 'nolabel';
+  if (ref === judge) return 'agree';
+  return ref === 'FAIL' ? 'lenient' : 'strict';
+}
+function metrics(list){
+  var m = {tp:0, fn:0, tn:0, fp:0, err:0, nolabel:0, agree:0, total:0};
+  list.forEach(function(r){
+    var k = kindOf(r.ref, r.judge);
+    if (k === 'error'){ m.err++; return; }
+    if (k === 'nolabel'){ m.nolabel++; return; }
+    m.total++;
+    if (k === 'agree') m.agree++;
+    if (r.ref === 'FAIL' && r.judge === 'FAIL') m.tp++;
+    if (k === 'lenient') m.fn++;
+    if (r.ref === 'PASS' && r.judge === 'PASS') m.tn++;
+    if (k === 'strict') m.fp++;
+  });
+  return m;
+}
+// </logic>
+
+
+var VSC = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;
+var store = {
+  mem: {},
+  get: function(k){
+    if (VSC) return this.mem[k] === undefined ? null : this.mem[k];
+    try { return localStorage.getItem(k); } catch(e) { return null; }
+  },
+  set: function(k, v){
+    if (VSC){ this.mem[k] = v; VSC.postMessage({type:'saveState', key:k, value:v}); return; }
+    try { localStorage.setItem(k, v); } catch(e) {}
+  },
+  remove: function(k){
+    if (VSC){ delete this.mem[k]; VSC.postMessage({type:'removeState', key:k}); return; }
+    try { localStorage.removeItem(k); } catch(e) {}
+  }
+};
+var pendingAsk = {}, askId = 0;
+function ask(message, ok){
+  if (VSC){ var id = ++askId; pendingAsk[id] = ok; VSC.postMessage({type:'confirm', id:id, message:message}); }
+  else if (confirm(message)) ok();
+}
+function notify(message){
+  if (VSC) VSC.postMessage({type:'notify', level:'error', message:message}); else alert(message);
+}
+function pickFiles(){ if (VSC) VSC.postMessage({type:'openFiles'}); else document.querySelector('#file').click(); }
+window.addEventListener('message', function(e){
+  var m = e.data || {};
+  if (m.type === 'files'){
+    Object.keys(m.saved || {}).forEach(function(k){ store.mem[k] = m.saved[k]; });
+    onFilesFromHost(m.files || []);
+  } else if (m.type === 'confirmResult'){
+    var cb = pendingAsk[m.id]; delete pendingAsk[m.id]; if (cb && m.ok) cb();
+  }
+});
+
+var LS = 'judgereview:';
+var CAUSES = [
+  {k:'judge_wrong', label:'The judge is wrong', hint:'Fix the judge prompt, then re-run on tune.'},
+  {k:'label_wrong', label:'My label was wrong', hint:'Correct your Pass/Fail in the labeled CSV, then re-run the comparison.'},
+  {k:'ambiguous', label:'Genuinely ambiguous', hint:'Reasonable graders could differ. Leave it and note it for the write-up.'},
+  {k:'definition', label:'The definition is unclear', hint:'Tighten the wording in rubric.md, and the judge prompt too.'}
+];
+var KIND_TEXT = {
+  agree: 'Agree',
+  lenient: 'Judge too lenient: it passed an answer you failed',
+  strict: 'Judge too strict: it failed an answer you passed',
+  error: 'No judge verdict for this row. The call probably failed, so re-run it.',
+  nolabel: 'You have no label for this row, so it is left out of the scores.'
+};
+var S = {name:'', headers:[], rows:[], ctx:{}, ctxName:'', cur:-1, rev:{}, fcrit:'all', fver:'all', fsplit:'all', fshow:'diff'};
+var $ = function(s){ return document.querySelector(s); };
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function rkey(r){ return r.id + '|' + r.criterion + '|' + r.version; }
+function rv(i){
+  var k = rkey(S.rows[i]);
+  if (!S.rev[k]) S.rev[k] = {cause:'', note:''};
+  return S.rev[k];
+}
+function save(){ store.set(LS + S.name, JSON.stringify(S.rev)); }
+function pct(a, b){ return b ? Math.round(100 * a / b) + '%' : 'n/a'; }
+
+function tableOf(text){
+  var t = parseCSV(text);
+  if (t.length < 1) return null;
+  var headers = t[0].map(function(h){ return h.trim(); });
+  var rows = t.slice(1).map(function(r){
+    var o = {}; headers.forEach(function(h, i){ o[h] = r[i] === undefined ? '' : r[i]; });
+    o.__extra = r.slice(headers.length).filter(function(x){ return x !== ''; }).join(' | ');
+    return o;
+  });
+  return {headers: headers, rows: rows};
+}
+function lower(headers){ return headers.map(function(h){ return h.toLowerCase(); }); }
+
+function onFilesFromHost(files){ ingest(files); }
+function ingest(files){
+  var judge = null, ctx = null;
+  files.forEach(function(f){
+    var t = tableOf(f.text); if (!t) return;
+    var lh = lower(t.headers);
+    if (lh.indexOf('judge_verdict') !== -1) judge = {name:f.name, t:t};
+    else if (lh.indexOf('question') !== -1) ctx = {name:f.name, t:t};
+  });
+  if (!judge && !ctx){
+    notify('I could not recognise these files. The judge file needs a "judge_verdict" column, and the labeled results file needs "question" and "bot_answer" columns.');
+    return;
+  }
+  if (ctx) loadCtx(ctx);
+  if (judge) loadJudge(judge);
+  renderAll();
+}
+function loadCtx(c){
+  var h = c.t.headers, lh = lower(h);
+  var pick = function(n){ var i = lh.indexOf(n); return i === -1 ? null : h[i]; };
+  var cid = pick('id'), cq = pick('question'), ca = pick('bot_answer') || pick('answer') || pick('output');
+  var cn = pick('note'), cc = pick('failure_category'), ce = pick('good_answer_must_include'), cv = pick('coverage');
+  S.ctx = {}; S.ctxName = c.name;
+  c.t.rows.forEach(function(r){
+    var id = cid ? r[cid] : '';
+    if (!id) return;
+    S.ctx[id] = {q: cq ? r[cq] : '', a: ca ? r[ca] : '', note: cn ? r[cn] : '', cat: cc ? r[cc] : '', exp: ce ? r[ce] : '', cov: cv ? r[cv] : ''};
+  });
+}
+function loadJudge(j){
+  var h = j.t.headers;
+  S.name = j.name;
+  S.headers = h.filter(function(x){ return x !== 'review_cause' && x !== 'review_note'; });
+  S.rows = j.t.rows.map(function(o){
+    return {
+      id: o.id || '', criterion: o.criterion || '', split: o.split || '',
+      version: o.judge_prompt_version || '', model: o.model || '',
+      ref: norm(o.reference_verdict || o.human_verdict),
+      judge: norm(o.judge_verdict),
+      reason: o.judge_reasoning || '',
+      extra: [o.error, o.judge_error, o.status, o.__extra].filter(function(x){ return x; }).join(' | '),
+      raw: o
+    };
+  });
+  S.rev = {};
+  S.rows.forEach(function(r){
+    S.rev[rkey(r)] = {cause: r.raw.review_cause || '', note: r.raw.review_note || ''};
+  });
+  try {
+    var saved = JSON.parse(store.get(LS + S.name) || 'null');
+    if (saved) Object.keys(saved).forEach(function(k){ if (S.rev[k]) S.rev[k] = saved[k]; });
+  } catch(e) {}
+  var crits = uniq(S.rows.map(function(r){ return r.criterion; }));
+  var splits = uniq(S.rows.map(function(r){ return r.split; }));
+  var vers = uniq(S.rows.map(function(r){ return r.version; }));
+  fill('#fcrit', crits, 'All criteria'); fill('#fsplit', splits, 'All splits'); fill('#fver', vers, 'All versions');
+  S.fcrit = crits.length === 1 ? crits[0] : 'all'; $('#fcrit').value = S.fcrit;
+  S.fver = latestOf(vers); $('#fver').value = S.fver;
+  S.fsplit = 'all'; $('#fsplit').value = 'all';
+  S.fshow = 'diff'; $('#fshow').value = 'diff';
+  S.cur = -1;
+}
+function uniq(a){ return a.filter(function(x, i){ return x && a.indexOf(x) === i; }); }
+function fill(sel, vals, allLabel){
+  $(sel).innerHTML = '<option value="all">' + allLabel + '</option>' +
+    vals.map(function(v){ return '<option value="' + esc(v) + '">' + esc(v) + '</option>'; }).join('');
+}
+
+function latestOf(vs){
+  if (!vs.length) return 'all';
+  return vs.slice().sort(function(a, b){ return a.localeCompare(b, undefined, {numeric:true}); })[vs.length - 1];
+}
+function scopeNoVer(r){
+  return (S.fcrit === 'all' || r.criterion === S.fcrit) && (S.fsplit === 'all' || r.split === S.fsplit);
+}
+function inScope(r){
+  return scopeNoVer(r) && (S.fver === 'all' || r.version === S.fver);
+}
+function visible(){
+  var out = [];
+  S.rows.forEach(function(r, i){
+    if (!inScope(r)) return;
+    var k = kindOf(r.ref, r.judge), R = rv(i), dis = (k === 'lenient' || k === 'strict');
+    if (S.fshow === 'diff' && !dis) return;
+    if (S.fshow === 'todo' && !(dis && !R.cause)) return;
+    if (S.fshow === 'error' && k !== 'error' && k !== 'nolabel') return;
+    out.push(i);
+  });
+  return out;
+}
+function ensureCur(){
+  var v = visible();
+  if (!v.length){ S.cur = -1; return; }
+  if (v.indexOf(S.cur) === -1) S.cur = v[0];
+}
+
+function renderTop(){
+  $('#fname').textContent = S.name ? S.name + (S.ctxName ? ' with ' + S.ctxName : '') : 'No file open';
+  $('#export').disabled = !S.rows.length;
+  if (!S.rows.length){ $('#progress').textContent = ''; return; }
+  var dis = 0, done = 0;
+  S.rows.forEach(function(r, i){
+    if (!inScope(r)) return;
+    var k = kindOf(r.ref, r.judge);
+    if (k === 'lenient' || k === 'strict'){ dis++; if (rv(i).cause) done++; }
+  });
+  $('#progress').textContent = done + ' of ' + dis + ' disagreements explained';
+}
+function byVersion(){
+  var vers = uniq(S.rows.map(function(r){ return r.version; }));
+  if (vers.length < 2) return '';
+  vers.sort(function(a, b){ return a.localeCompare(b, undefined, {numeric:true}); });
+  return '<p class="snote">By judge prompt version</p>' + vers.map(function(v){
+    var mm = metrics(S.rows.filter(function(r){ return r.version === v && scopeNoVer(r); }));
+    return '<div class="srow"><span>' + esc(v) + '</span><b>agree ' + pct(mm.agree, mm.total) +
+      ', TPR ' + pct(mm.tp, mm.tp + mm.fn) + ', TNR ' + pct(mm.tn, mm.tn + mm.fp) + '</b></div>';
+  }).join('');
+}
+function renderScore(){
+  var el = $('#score'), ban = $('#banner');
+  ban.innerHTML = S.fsplit === 'test'
+    ? '<p class="banner">These are your held-out test rows. Read the scores once, then stop tuning the judge.</p>' : '';
+  if (!S.rows.length){ el.innerHTML = ''; return; }
+  var m = metrics(S.rows.filter(inScope));
+  el.innerHTML =
+    '<div class="srow"><span>Agree with you</span><b>' + m.agree + ' of ' + m.total + ' (' + pct(m.agree, m.total) + ')</b></div>' +
+    '<div class="srow"><span>TPR, failures caught</span><b>' + m.tp + ' of ' + (m.tp + m.fn) + ' (' + pct(m.tp, m.tp + m.fn) + ')</b></div>' +
+    '<div class="srow"><span>TNR, good answers passed</span><b>' + m.tn + ' of ' + (m.tn + m.fp) + ' (' + pct(m.tn, m.tn + m.fp) + ')</b></div>' +
+    '<div class="srow"><span>Missed failures (too lenient)</span><b>' + m.fn + '</b></div>' +
+    '<div class="srow"><span>False alarms (too strict)</span><b>' + m.fp + '</b></div>' +
+    ((m.err || m.nolabel) ? '<p class="snote">Left out of the scores: ' +
+      (m.err ? m.err + ' with no judge verdict' : '') + (m.err && m.nolabel ? ', ' : '') +
+      (m.nolabel ? m.nolabel + ' with no label from you' : '') + '.</p>' : '') + byVersion();
+}
+function renderList(){
+  var el = $('#list'), st = el.scrollTop, v = visible();
+  el.innerHTML = v.map(function(i){
+    var r = S.rows[i], k = kindOf(r.ref, r.judge), R = rv(i);
+    var dot = k === 'agree' ? 'ok' : (k === 'lenient' || k === 'strict') ? 'problem' : '';
+    var done = (k === 'lenient' || k === 'strict') && R.cause;
+    return '<button class="item' + (i === S.cur ? ' active' : '') + (done ? ' done' : '') + '" data-i="' + i + '">' +
+      '<span class="dot ' + dot + '"></span><span><span class="id">' + esc(r.id) + '</span>' +
+      '<span class="sub">you ' + (r.ref || 'none') + ', judge ' + (r.judge || 'none') + '</span></span></button>';
+  }).join('') || '<p class="none">' + (S.rows.length ? 'Nothing matches these filters.' : 'Open your files to start.') + '</p>';
+  el.scrollTop = st;
+}
+function renderReader(){
+  var el = $('#reader');
+  if (!S.rows.length){
+    el.innerHTML = '<div class="empty"><h1>Review your judge\'s verdicts</h1>' +
+      '<p>Open your judge results file (for example judge_results_v1.csv) together with labeled_results_v1.csv. ' +
+      'Select both files in the picker, or drag both onto this page. The labeled file supplies the question and the bot\'s answer, ' +
+      'so you can read them next to the judge\'s reasoning.</p>' +
+      '<button class="primary" data-open>Open files</button></div>';
+    return;
+  }
+  if (S.cur === -1){
+    el.innerHTML = '<div class="empty"><h1>Nothing to show</h1><p>No rows match the current filters. Try "All rows" under Show.</p></div>';
+    return;
+  }
+  var r = S.rows[S.cur], c = S.ctx[r.id], v = visible(), pos = v.indexOf(S.cur) + 1;
+  var chips = [r.criterion, r.split, r.version, r.model].filter(Boolean)
+    .map(function(x){ return '<span class="chip">' + esc(x) + '</span>'; }).join('');
+  if (c && c.cov) chips += '<span class="chip">coverage: ' + esc(c.cov) + '</span>';
+  var body;
+  if (c){
+    var ans = (c.a || '').replace(/\n{3,}/g, '\n\n').trim();
+    body = '<div class="who">Customer</div><div class="question">' + esc(c.q) + '</div>' +
+      '<div class="who">Bot</div><div class="answer">' + esc(ans) + '</div>' +
+      (c.exp ? '<div class="expected"><b>Good answer must include</b><div>' + esc(c.exp) + '</div></div>' : '') +
+      ((c.note || c.cat) ? '<div class="who">Your open-coding note</div><div class="mynote">' +
+        esc(c.note || '') + (c.cat ? '\n[' + esc(c.cat) + ']' : '') + '</div>' : '');
+  } else {
+    body = '<div class="missing">The question and the bot\'s answer are not loaded. Click "Open files" and select your labeled results file (for example labeled_results_v1.csv) to see them here.</div>';
+  }
+  el.innerHTML = '<div class="col"><div class="head"><h1>' + esc(r.id) + '</h1><span class="pos">' + pos + ' of ' + v.length + '</span></div>' +
+    '<div class="chips">' + chips + '</div>' + body +
+    '<div class="nav"><button data-go="-1">Previous</button><button data-go="1">Next</button></div>' +
+    '<p class="hint"><kbd>←</kbd> <kbd>→</kbd> move between rows. <kbd>1</kbd> to <kbd>4</kbd> pick a reason for the disagreement. <kbd>Esc</kbd> leaves a text box.</p></div>';
+  el.scrollTop = 0;
+}
+function othersHtml(r){
+  var others = S.rows.filter(function(o){ return o !== r && o.id === r.id && o.criterion === r.criterion; });
+  if (!others.length) return '';
+  return '<p class="small">Other prompt versions on this row: ' + others.map(function(o){
+    return esc(o.version || '?') + ' judged ' + (o.judge || 'no verdict');
+  }).join(', ') + '.</p>';
+}
+function renderReview(){
+  var el = $('#review');
+  if (!S.rows.length || S.cur === -1){ el.innerHTML = ''; return; }
+  var r = S.rows[S.cur], R = rv(S.cur), k = kindOf(r.ref, r.judge);
+  var dis = (k === 'lenient' || k === 'strict');
+  var reason = r.reason || r.extra || '(no reasoning saved)';
+  var picked = CAUSES.filter(function(c){ return c.k === R.cause; })[0];
+  el.innerHTML =
+    '<h2>Verdicts</h2>' +
+    '<div class="verdicts"><div class="vbox"><span>You</span><b class="' + (r.ref || 'none') + '">' + (r.ref || 'none') + '</b></div>' +
+    '<div class="vbox"><span>Judge</span><b class="' + (r.judge || 'none') + '">' + (r.judge || 'none') + '</b></div></div>' +
+    '<div class="badge ' + k + '">' + KIND_TEXT[k] + '</div>' + othersHtml(r) +
+    '<h2 class="sp">Judge\'s reasoning</h2><div class="reason">' + esc(reason) + '</div>' +
+    '<h2 class="sp">' + (dis ? 'Why do you disagree?' : 'Notes') + '</h2>' +
+    '<div class="causes">' + CAUSES.map(function(c, n){
+      return '<button data-cause="' + c.k + '" class="' + (R.cause === c.k ? 'on' : '') + '">' + (n + 1) + '. ' + esc(c.label) + '</button>';
+    }).join('') + '</div>' +
+    (picked ? '<p class="small">' + esc(picked.hint) + '</p>' : '') +
+    '<label for="rnote">Note</label><textarea id="rnote" placeholder="What did you notice? For example: the judge ignored that the customer already said full price.">' + esc(R.note) + '</textarea>';
+}
+function renderAll(){ ensureCur(); renderTop(); renderScore(); renderList(); renderReader(); renderReview(); }
+
+function go(delta){
+  var v = visible(); if (!v.length) return;
+  var p = Math.max(0, Math.min(v.length - 1, v.indexOf(S.cur) + delta));
+  S.cur = v[p];
+  renderList(); renderReader(); renderReview();
+  var a = $('#list .active'); if (a) a.scrollIntoView({block:'nearest'});
+}
+function setCause(key){
+  if (S.cur === -1) return;
+  var R = rv(S.cur);
+  R.cause = (R.cause === key) ? '' : key;
+  save(); renderTop(); renderList(); renderReview();
+}
+
+// events
+function readFiles(list){
+  var arr = Array.prototype.slice.call(list);
+  Promise.all(arr.map(function(f){
+    return new Promise(function(res){
+      var rd = new FileReader();
+      rd.onload = function(){ res({name:f.name, text:rd.result}); };
+      rd.readAsText(f);
+    });
+  })).then(ingest);
+}
+$('#open').addEventListener('click', pickFiles);
+document.addEventListener('click', function(e){ if (e.target.closest('[data-open]')) pickFiles(); });
+$('#file').addEventListener('change', function(e){ if (e.target.files.length) readFiles(e.target.files); e.target.value = ''; });
+window.addEventListener('dragover', function(e){ e.preventDefault(); });
+window.addEventListener('drop', function(e){ e.preventDefault(); if (e.dataTransfer.files.length) readFiles(e.dataTransfer.files); });
+$('#fcrit').addEventListener('change', function(e){ S.fcrit = e.target.value; renderAll(); });
+$('#fsplit').addEventListener('change', function(e){ S.fsplit = e.target.value; renderAll(); });
+$('#fver').addEventListener('change', function(e){ S.fver = e.target.value; renderAll(); });
+$('#fshow').addEventListener('change', function(e){ S.fshow = e.target.value; renderAll(); });
+$('#list').addEventListener('click', function(e){
+  var it = e.target.closest('.item'); if (!it) return;
+  S.cur = Number(it.dataset.i); renderList(); renderReader(); renderReview();
+});
+$('#reader').addEventListener('click', function(e){
+  var g = e.target.closest('[data-go]'); if (g) go(Number(g.dataset.go));
+});
+$('#review').addEventListener('click', function(e){
+  var b = e.target.closest('[data-cause]'); if (b) setCause(b.dataset.cause);
+});
+$('#review').addEventListener('input', function(e){
+  if (e.target.id !== 'rnote') return;
+  rv(S.cur).note = e.target.value; save();
+});
+document.addEventListener('keydown', function(e){
+  var ae = document.activeElement;
+  if (e.key === 'Escape' && ae && ae.matches('input,textarea')){ ae.blur(); return; }
+  if (ae && ae.matches('input,textarea,select')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || !S.rows.length) return;
+  if (e.key === 'ArrowRight' || e.key === 'j') go(1);
+  else if (e.key === 'ArrowLeft' || e.key === 'k') go(-1);
+  else if (e.key >= '1' && e.key <= '4') setCause(CAUSES[Number(e.key) - 1].k);
+});
+$('#export').addEventListener('click', function(){
+  var head = S.headers.concat(['review_cause', 'review_note']);
+  var lines = [head.map(csvCell).join(',')];
+  S.rows.forEach(function(r, i){
+    var R = rv(i);
+    var cells = S.headers.map(function(h){ return r.raw[h]; }).concat([R.cause, R.note]);
+    lines.push(cells.map(csvCell).join(','));
+  });
+  if (VSC){ VSC.postMessage({type:'export', filename:'reviewed_' + S.name.replace(/^reviewed_/, ''), text:lines.join('\n')}); return; }
+  var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'reviewed_' + S.name.replace(/^reviewed_/, '');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+});
+
+fill('#fcrit', [], 'All criteria'); fill('#fsplit', [], 'All splits'); fill('#fver', [], 'All versions');
+renderAll();
+</script>
+</body>
+</html>
