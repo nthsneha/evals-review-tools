@@ -3,11 +3,11 @@
   "displayName": "Evals Review Tools",
   "description": "Read and annotate LLM outputs, then review your LLM judge's verdicts against your own labels. Built for learning evals.",
   "version": "0.1.0",
-  "publisher": "your-name",
+  "publisher": "nthsneha",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-github-username/evals-review-tools"
+    "url": "https://github.com/nthsneha/evals-review-tools"
   },
   "engines": {
     "vscode": "^1.80.0"
